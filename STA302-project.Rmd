@@ -7,6 +7,79 @@ date: "2024-08-05"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+```{r}
+install.packages("MASS")
+install.packages("gapminder")
+install.packages("leaps")
+install.packages("usdm")
+install.packages("car")
+install.packages("corrplot")
+install.packages("texreg")
+install.packages("MPV")
+install.packages("faraway")
+install.packages("lmtest")
+install.packages("nortest")
+
+library(dplyr)
+library(gapminder)
+library(leaps)
+library(glmnet)
+library(ggplot2)
+library(MASS)
+library(usdm)
+library(car)
+library(corrplot)
+library(texreg)
+library(MPV)
+library(faraway)
+library(lmtest)
+library(nortest)
+```
+
+```{r}
+#Taking the dataset, cleaning it so it only has data from the covariates we're interested in
+epl <- read.csv("epl_data.csv")
+eplClean <- epl %>% select_(4, 7, 6, 10, 40, 24)
+
+#Getting rid of observations with missing values, this ended up getting rid of all GK data
+eplCleaner <- na.omit(eplClean)
+
+#Looking at the first few observations
+head(eplCleaner)
+
+#Creating a model to predict player appearances
+model <- lm(Appearances ~ Age + Goals + Assists + Tackles, data = eplCleaner)
+summary(model)
+```
+
+```{r}
+#Checking for linearity, should have no pattern
+plot(model, which = 1)
+
+#Checking for independence
+dwtest(model)
+
+#Checking for Homoscedasticity
+plot(model, which = 3)
+
+#Checking for normality of residuals
+plot(model, which = 2)
+
+
+#Checking for multicollinearity (Variance Inflation Factor)
+#If 0 < VIF < 1, no issue
+#If 1 < VIF < 5, moderate correlation, not enough to warrant correction
+#If VIF > 5, high correlation
+vif(model)
+
+```
+
+```{r}
+#Creating pairwise plots to check for any multicollinearity
+#Had to remove the position column since it's non-numerical
+eplCleanCheck <- epl %>% select_(7, 6, 10, 40, 24)
+pairs(eplCleanCheck)
+```
 
 ## R Markdown
 
