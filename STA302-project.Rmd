@@ -36,67 +36,91 @@ library(lmtest)
 library(nortest)
 ```
 
+
 ```{r}
-#Taking the dataset, cleaning it so it only has data from the covariates we're interested in
+#Assigning the dataset to variable epl
 epl <- read.csv("epl_data.csv")
-eplClean <- epl %>% select_(4, 7, 6, 10, 40, 24)
 
-#Getting rid of observations with missing values, this ended up getting rid of all GK data
-eplCleaner <- na.omit(eplClean)
+#Selecting variables of interest and creating a matrix with just those values
+eplFiltered <- epl %>% select_(6, 7, 8, 9, 10, 20, 24, 27, 28, 29, 40, 41, 43, 44, 56, 57, 58, 59)
+head(eplFiltered)
 
-#Looking at the first few observations
-head(eplCleaner)
-
-#Creating a model to predict player appearances
-model <- lm(Appearances ~ Age + Goals + Assists + Tackles, data = eplCleaner)
-summary(model)
+#Removing all NA values, leaves us with 501 observations
+eplWoNa <- na.omit(eplFiltered)
+nrow(eplWoNa)
 ```
 
 ```{r}
-#Checking for linearity, should have no pattern
-plot(model, which = 1)
+#Conducting variable selection using AIC
 
-#Checking for independence
-dwtest(model)
+#Fitting a model using all variables
+modAll <- lm(Appearances ~ Age + Wins + Losses + Goals + Hit.woodwork + Tackles + 
+              Blocked.shots + Interceptions + Clearances + Assists + Passes + Big.chances.created +
+              Crosses + Yellow.cards + Red.cards + Fouls + Offsides, data = eplWoNa)
+#Taking a look at the model
+summary(modAll)
 
-#Checking for Homoscedasticity
-plot(model, which = 3)
+#Checking the value of AIC for the model with all variables
+AIC(modAll)
 
-#Checking for normality of residuals
-plot(model, which = 2)
-
-
-#Checking for multicollinearity (Variance Inflation Factor)
-#If 0 < VIF < 1, no issue
-#If 1 < VIF < 5, moderate correlation, not enough to warrant correction
-#If VIF > 5, high correlation
-vif(model)
-
+#Creating an intercept only model
+mod0 <- lm(Appearances ~ 1, data = eplWoNa)
+AIC(mod0)
+summary(mod0)$r.squared
 ```
 
 ```{r}
-#Creating pairwise plots to check for any multicollinearity
-#Had to remove the position column since it's non-numerical
-eplCleanCheck <- epl %>% select_(7, 6, 10, 40, 24)
-pairs(eplCleanCheck)
+#Conducting backward elimination on the full model (modAll)
+bmod <- stepAIC(object = modAll, direction = "backward")
+coef(bmod)
+
+#Checking the adjusted R-squared after the variable selection (backward)
+summary(bmod)$adj.r.squared
+
+#Conducting forward elimination on the empty model, full model as scope
+fmod <- stepAIC(object = mod0, direction = "forward", scope = formula(modAll), trace = FALSE)
+coef(fmod)
+
+#Checking the adjusted R-squared after the variable selection (forward)
+summary(fmod)$adj.r.squared
+
+#Both methods select the same variables :)
+
+
+#This shows that the AIC decreases with each added variable
+bmod$anova
+fmod$anova
 ```
 
-## R Markdown
+```{r}
+#Partial F-test
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+#The best model given by both forwards and backwards methods
+optimodel <- lm(Appearances ~ Wins + Losses + Tackles + Crosses + Clearances + 
+                  Offsides + Big.chances.created + Assists + Blocked.shots + 
+                  Goals, data = eplWoNa)
+#Second best forward method model
+fSecondBest <- lm(Appearances ~ Wins + Losses + Tackles + Crosses + Clearances + 
+                    Offsides + Big.chances.created + Assists + 
+                    Blocked.shots, data = eplWoNa)
+#Second best backward method model
+bSecondBest <- lm(Appearances ~ Wins + Losses + Goals + Hit.woodwork + Tackles + 
+                    Blocked.shots + Clearances + Assists + Big.chances.created + 
+                    Crosses + Offsides, data = eplWoNa)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+#The output gives Pr(>F) = 0.01754, we reject null hypothesis, decide to keep new variable
+anova(optimodel, fSecondBest)
 
-```{r cars}
-summary(cars)
+#The output gives Pr(>F) = 0.222, we cannot reject null hypothesis, decide to remove excess variable
+anova(optimodel, bSecondBest)
+
+#The two partial F tests above, along with our stepAIC variable selection allow us to conclude -
+#optimodel is the best model for the given data
 ```
+```{r}
+#Assumption Checking
 
-## Including Plots
+#Residuals do not appear normal looking at the Q-Q plot produced here
+plot(optimodel)
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
 ```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
