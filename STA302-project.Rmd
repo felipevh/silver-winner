@@ -35,12 +35,12 @@ library(leaps)
 library(glmnet)
 library(ggplot2)
 library(MASS)
-library(usdm)
-library(car)
+#library(usdm)
+#library(car)
 library(corrplot)
 library(texreg)
 library(MPV)
-library(faraway)
+#library(faraway)
 library(lmtest)
 library(nortest)
 ```
@@ -225,4 +225,70 @@ plot(optimal, which = 3)
 
 # Statistical tests for normality
 shapiro.test(residuals(optimal_sqrt))
+```
+
+```{r}
+# Calculate Cook's Distance
+cooks_d <- cooks.distance(optimal)
+
+# Identify influential points where Cook's distance is greater than a threshold (commonly 4/n)
+influential_points <- which(cooks_d > 4/nrow(eplPos))
+
+# Plot Cooks Distance
+plot(cooks_d, type = "h", main = "Cook's Distance", ylab = "Cook's Distance", xlab = "Observation Index")
+abline(h = 4/nrow(eplPos), col = "red", lty = 2)
+points(influential_points, cooks_d[influential_points], col = "blue", pch = 19)
+
+
+
+
+# Calculate DFBETAS
+dfbetas_values <- dfbetas(optimal)
+threshold <- 2/sqrt(nrow(eplPos))
+
+# Identify influential points using DFBETAS
+influential_points_dfbetas <- which(apply(abs(dfbetas_values), 1, max) > threshold)
+
+# Plot DFBETAS
+par(mfrow = c(2, 5))  # Adjusting the layout for multiple plots
+for (i in 1:ncol(dfbetas_values)) {
+  plot(dfbetas_values[, i], type = "h", main = colnames(dfbetas_values)[i],
+       ylab = "DFBETAS", xlab = "Observation Index")
+  abline(h = threshold, col = "red", lty = 2)
+  abline(h = -threshold, col = "red", lty = 2)
+  points(influential_points_dfbetas, dfbetas_values[influential_points_dfbetas, i], col = "blue", pch = 19)
+}
+
+```
+
+
+```{r}
+eplPos_cleaned <- eplPos[-influential_points, ]
+
+optimal_cleaned <- lm(Appearances ~ Wins + Fouls + Interceptions + Blocked.shots + 
+                      Offsides + Crosses + Clearances + Goals + Hit.woodwork, data = eplPos_cleaned)
+```
+
+```{r}
+# Checking residuals for normality
+par(mfrow = c(2, 2))
+
+# Histogram of residuals
+hist(residuals(optimal_cleaned), main = "Histogram of Residuals", xlab = "Residuals", breaks = 20)
+
+# Q-Q plot of residuals
+qqnorm(residuals(optimal_cleaned))
+qqline(residuals(optimal_cleaned), col = "red")
+
+# Residuals vs Fitted plot
+plot(fitted(optimal_cleaned), residuals(optimal_cleaned),
+     xlab = "Fitted Values", ylab = "Residuals",
+     main = "Residuals vs Fitted")
+abline(h = 0, col = "red")
+
+# Scale-Location plot
+plot(optimal, which = 3)
+
+# Statistical tests for normality
+shapiro.test(residuals(optimal_cleaned))
 ```
