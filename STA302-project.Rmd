@@ -14,17 +14,21 @@ knitr::opts_chunk$set(echo = TRUE)
 # install.packages("MASS")
 # install.packages("gapminder")
 # install.packages("leaps")
-# install.packages("usdm")
-# install.packages("car")
+# install.packages("raster")
+# install.packages("terra")
+#install.packages("usdm")
+install.packages("car")
+install.packages("caret")
 # install.packages("corrplot")
 # install.packages("texreg")
 # install.packages("MPV")
-# install.packages("faraway")
+install.packages("faraway")
 # install.packages("lmtest")
 # install.packages("nortest")
 # install.packages("scipy.stats")
 # install.packages("sandwich")
-# install.packages("car")
+install.packages("glmnet")
+
 ```
 
 ```{r}
@@ -35,18 +39,21 @@ library(leaps)
 library(glmnet)
 library(ggplot2)
 library(MASS)
-#library(usdm)
-#library(car)
+library(car)
 library(corrplot)
 library(texreg)
 library(MPV)
-#library(faraway)
+library(faraway)
 library(lmtest)
 library(nortest)
-library(car)
+library(caret)
+library(glmnet)
+
 ```
 
 ```{r}
+set.seed(123)  # Set seed for reproducibility
+
 #Assigning the dataset to variable epl
 epl <- read.csv("epl_data.csv")
 
@@ -309,4 +316,91 @@ vif_factors <-vif(optimal_cleaned)
 vif_factors
 # Visualizing VIF
 barplot(vif_factors, col = "red", main = "Variance Inflation Factor", las=2,cex.names=0.8)
+```
+
+```{r}
+# Since VIF > 10 for one covariate, most covariates have 4 < VIF < 10, there is sign of some multicollinearity
+# so, we will try ridge regression as well
+
+
+# Prepare the data
+x <- model.matrix(Appearances ~ Wins + Fouls + Interceptions + Blocked.shots + 
+                  Offsides + Crosses + Clearances + Goals + Hit.woodwork, data = eplPos_cleaned)[,-1]
+y <- eplPos_cleaned$Appearances
+
+
+# Fit ridge regression model
+ridge_model <- glmnet(x, y, alpha = 0)
+
+# Perform cross-validation to find the best lambda
+cv_ridge <- cv.glmnet(x, y, alpha = 0)
+
+# Best lambda value
+best_lambda <- cv_ridge$lambda.min
+best_lambda
+
+
+# Refit the ridge regression model with the optimal lambda
+ridge_model_best <- glmnet(x, y, alpha = 0, lambda = best_lambda)
+
+# View the coefficients of the final model
+coef(ridge_model_best)
+
+```
+
+
+```{r}
+
+# Set up k-fold cross-validation with 10 folds
+train_control <- trainControl(method = "cv", number = 10)
+
+# Fit the model using k-fold cross-validation
+cv_model <- train(Appearances ~ Wins + Fouls + Interceptions + Blocked.shots + 
+                  Offsides + Crosses + Clearances + Goals + Hit.woodwork, 
+                  data = eplPos_cleaned, 
+                  method = "lm", 
+                  trControl = train_control)
+
+# Print the results
+print(cv_model)
+
+# Summary of the model
+summary(cv_model$finalModel)
+
+```
+
+```{r}
+# Predictions from the original linear regression model
+predictions_optimal <- predict(optimal_cleaned, newdata = eplPos_cleaned)
+
+# Predictions from the ridge regression model
+predictions_ridge <- predict(ridge_model_best, s = best_lambda, newx = x)
+```
+
+```{r}
+# Calculate MSE for the original linear regression model
+mse_optimal <- mean((predictions_optimal - eplPos_cleaned$Appearances)^2)
+
+# Calculate MSE for the ridge regression model
+mse_ridge <- mean((predictions_ridge - y)^2)
+
+# Print MSEs
+cat("MSE for Original Model: ", mse_optimal, "\n")
+cat("MSE for Ridge Regression Model: ", mse_ridge, "\n")
+
+
+# Calculate R-squared for the original linear regression model
+sst_optimal <- sum((eplPos_cleaned$Appearances - mean(eplPos_cleaned$Appearances))^2)
+sse_optimal <- sum((predictions_optimal - eplPos_cleaned$Appearances)^2)
+r_squared_optimal <- 1 - sse_optimal/sst_optimal
+
+# Calculate R-squared for the ridge regression model
+sst_ridge <- sum((y - mean(y))^2)
+sse_ridge <- sum((predictions_ridge - y)^2)
+r_squared_ridge <- 1 - sse_ridge/sst_ridge
+
+# Print R-squared values
+cat("R-squared for Original Model: ", r_squared_optimal, "\n")
+cat("R-squared for Ridge Regression Model: ", r_squared_ridge, "\n")
+
 ```
