@@ -22,9 +22,9 @@ knitr::opts_chunk$set(echo = TRUE)
 # install.packages("faraway")
 # install.packages("lmtest")
 # install.packages("nortest")
-# 
 # install.packages("scipy.stats")
-#install.packages("sandwich")
+# install.packages("sandwich")
+# install.packages("car")
 ```
 
 ```{r}
@@ -43,6 +43,7 @@ library(MPV)
 #library(faraway)
 library(lmtest)
 library(nortest)
+library(car)
 ```
 
 ```{r}
@@ -291,4 +292,21 @@ plot(optimal, which = 3)
 
 # Statistical tests for normality
 shapiro.test(residuals(optimal_cleaned))
+```
+
+VIF of the cleaned optimal model
+```{r}
+#vif_factors <-vif(modAll)
+#vif_factors <-vif(mod0)
+#vif_factors <-vif(optimodel)
+#vif_factors <-vif(fSecondBest)
+#vif_factors <-vif(fThirdBest)
+#vif_factors <-vif(fFourthBest)
+#vif_factors <-vif(bSecondBest)
+#vif_factors <-vif(optimal)
+#vif_factors <-vif(optimal_sqrt)
+vif_factors <-vif(optimal_cleaned)
+vif_factors
+# Visualizing VIF
+barplot(vif_factors, col = "red", main = "Variance Inflation Factor", las=2,cex.names=0.8)
 ```
