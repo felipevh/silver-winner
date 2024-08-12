@@ -368,6 +368,11 @@ print(cv_model)
 summary(cv_model$finalModel)
 
 ```
+```{r}
+summary(optimal_cleaned)
+
+
+```
 
 ```{r}
 # Predictions from the original linear regression model
@@ -402,5 +407,62 @@ r_squared_ridge <- 1 - sse_ridge/sst_ridge
 # Print R-squared values
 cat("R-squared for Original Model: ", r_squared_optimal, "\n")
 cat("R-squared for Ridge Regression Model: ", r_squared_ridge, "\n")
+
+```
+
+```{r}
+
+# Load necessary libraries
+library(glmnet)
+
+# Fit the ridge regression model
+ridge_model <- glmnet(as.matrix(eplPos_cleaned[, -which(names(eplPos_cleaned) == "Appearances")]), 
+                      eplPos_cleaned$Appearances, 
+                      alpha = 0, lambda = best_lambda)
+
+# Extract the coefficients for the best lambda
+ridge_coefficients <- coef(ridge_model, s = best_lambda)
+
+# Calculate predictions from the ridge regression model
+predictions_ridge <- predict(ridge_model, s = best_lambda, newx = as.matrix(eplPos_cleaned[, -which(names(eplPos_cleaned) == "Appearances")]))
+
+# Calculate residuals for the ridge regression model
+residuals_ridge <- eplPos_cleaned$Appearances - predictions_ridge
+
+
+cv_ridge <- cv.glmnet(as.matrix(eplPos_cleaned[, -which(names(eplPos_cleaned) == "Appearances")]), 
+                      eplPos_cleaned$Appearances, 
+                      alpha = 0)
+se_ridge <- sqrt(cv_ridge$cvm[cv_ridge$lambda == best_lambda])
+
+# Create a summary similar to lm()
+summary_ridge <- data.frame(
+  Coefficient = ridge_coefficients[-1],  # Exclude the intercept
+  Std.Error = se_ridge  # This is a rough estimate)
+)
+
+# Print the summary for the ridge regression model
+print("Summary for Ridge Regression Model:")
+print(summary_ridge)
+
+# Print residuals summary
+residuals_summary_ridge <- summary(residuals_ridge)
+print("Residuals Summary for Ridge Regression Model:")
+print(residuals_summary_ridge)
+
+# Calculate R-squared for the ridge regression model
+sst_ridge <- sum((eplPos_cleaned$Appearances - mean(eplPos_cleaned$Appearances))^2)
+sse_ridge <- sum(residuals_ridge^2)
+r_squared_ridge <- 1 - sse_ridge/sst_ridge
+
+# Print R-squared for the ridge regression model
+cat("R-squared for Ridge Regression Model: ", r_squared_ridge, "\n")
+
+# Calculate the residual standard error
+residual_standard_error_ridge <- sqrt(sse_ridge / (nrow(eplPos_cleaned) - length(ridge_coefficients) - 1))
+
+# Print Residual Standard Error for Ridge Regression Model
+cat("Residual Standard Error for Ridge Regression Model: ", residual_standard_error_ridge, "\n")
+
 
 ```
