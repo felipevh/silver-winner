@@ -247,34 +247,16 @@ plot(cooks_d, type = "h", main = "Cook's Distance", ylab = "Cook's Distance", xl
 abline(h = 4/nrow(eplPos), col = "red", lty = 2)
 points(influential_points, cooks_d[influential_points], col = "blue", pch = 19)
 
-
-
-
-# Calculate DFBETAS
-dfbetas_values <- dfbetas(optimal)
-threshold <- 2/sqrt(nrow(eplPos))
-
-# Identify influential points using DFBETAS
-influential_points_dfbetas <- which(apply(abs(dfbetas_values), 1, max) > threshold)
-
-# Plot DFBETAS
-par(mfrow = c(2, 5))  # Adjusting the layout for multiple plots
-for (i in 1:ncol(dfbetas_values)) {
-  plot(dfbetas_values[, i], type = "h", main = colnames(dfbetas_values)[i],
-       ylab = "DFBETAS", xlab = "Observation Index")
-  abline(h = threshold, col = "red", lty = 2)
-  abline(h = -threshold, col = "red", lty = 2)
-  points(influential_points_dfbetas, dfbetas_values[influential_points_dfbetas, i], col = "blue", pch = 19)
-}
-
 ```
 
 
 ```{r}
 eplPos_cleaned <- eplPos[-influential_points, ]
 
+# Refit the linear model using the cleaned dataset
 optimal_cleaned <- lm(Appearances ~ Wins + Fouls + Interceptions + Blocked.shots + 
                       Offsides + Crosses + Clearances + Goals + Hit.woodwork, data = eplPos_cleaned)
+
 ```
 
 ```{r}
@@ -329,28 +311,31 @@ x <- model.matrix(Appearances ~ Wins + Fouls + Interceptions + Blocked.shots +
 y <- eplPos_cleaned$Appearances
 
 
-# Fit ridge regression model
-ridge_model <- glmnet(x, y, alpha = 0)
+# Fit lasso regression model
+lasso_model <- glmnet(x, y, alpha = 0)
 
 # Perform cross-validation to find the best lambda
-cv_ridge <- cv.glmnet(x, y, alpha = 0)
+cv_lasso <- cv.glmnet(x, y, alpha = 0)
 
+print(cv_lasso)
+```
+
+```{r}
 # Best lambda value
 best_lambda <- cv_ridge$lambda.min
-best_lambda
+
 
 
 # Refit the ridge regression model with the optimal lambda
-ridge_model_best <- glmnet(x, y, alpha = 0, lambda = best_lambda)
+lasso_model_best <- glmnet(x, y, alpha = 0, lambda = best_lambda)
 
 # View the coefficients of the final model
-coef(ridge_model_best)
+coef(lasso_model_best)
 
 ```
 
 
 ```{r}
-
 # Set up k-fold cross-validation with 10 folds
 train_control <- trainControl(method = "cv", number = 10)
 
@@ -363,15 +348,9 @@ cv_model <- train(Appearances ~ Wins + Fouls + Interceptions + Blocked.shots +
 
 # Print the results
 print(cv_model)
-
-# Summary of the model
-summary(cv_model$finalModel)
-
 ```
 ```{r}
 summary(optimal_cleaned)
-
-
 ```
 
 ```{r}
@@ -379,19 +358,19 @@ summary(optimal_cleaned)
 predictions_optimal <- predict(optimal_cleaned, newdata = eplPos_cleaned)
 
 # Predictions from the ridge regression model
-predictions_ridge <- predict(ridge_model_best, s = best_lambda, newx = x)
+predictions_lasso <- predict(lasso_model_best, s = best_lambda, newx = x)
 ```
 
 ```{r}
 # Calculate MSE for the original linear regression model
 mse_optimal <- mean((predictions_optimal - eplPos_cleaned$Appearances)^2)
 
-# Calculate MSE for the ridge regression model
-mse_ridge <- mean((predictions_ridge - y)^2)
+# Calculate MSE for the lasso regression model
+mse_lasso <- mean((predictions_lasso - y)^2)
 
 # Print MSEs
 cat("MSE for Original Model: ", mse_optimal, "\n")
-cat("MSE for Ridge Regression Model: ", mse_ridge, "\n")
+cat("MSE for Lasso Regression Model: ", mse_lasso, "\n")
 
 
 # Calculate R-squared for the original linear regression model
@@ -399,70 +378,22 @@ sst_optimal <- sum((eplPos_cleaned$Appearances - mean(eplPos_cleaned$Appearances
 sse_optimal <- sum((predictions_optimal - eplPos_cleaned$Appearances)^2)
 r_squared_optimal <- 1 - sse_optimal/sst_optimal
 
-# Calculate R-squared for the ridge regression model
-sst_ridge <- sum((y - mean(y))^2)
-sse_ridge <- sum((predictions_ridge - y)^2)
-r_squared_ridge <- 1 - sse_ridge/sst_ridge
 
-# Print R-squared values
+# Calculate R-squared for the lasso regression model
+sst_lasso <- sum((y - mean(y))^2)
+sse_lasso <- sum((predictions_lasso - y)^2)
+r_squared_lasso <- 1 - sse_lasso/sst_lasso
+
+# Calculate the number of observations and predictors for the original model
+n_optimal <- nrow(eplPos_cleaned)
+p_optimal <- length(coef(optimal_cleaned)) - 1  # Exclude the intercept
+
+# Calculate the number of observations and predictors for the lasso regression model
+n_lasso <- length(y)
+p_lasso <- length(coef(lasso_model)) - 1  # Exclude the intercept (assuming lasso_model is the lasso regression object)
+
+
+# Print R-squared and Adjusted R-squared values
 cat("R-squared for Original Model: ", r_squared_optimal, "\n")
-cat("R-squared for Ridge Regression Model: ", r_squared_ridge, "\n")
-
-```
-
-```{r}
-
-# Load necessary libraries
-library(glmnet)
-
-# Fit the ridge regression model
-ridge_model <- glmnet(as.matrix(eplPos_cleaned[, -which(names(eplPos_cleaned) == "Appearances")]), 
-                      eplPos_cleaned$Appearances, 
-                      alpha = 0, lambda = best_lambda)
-
-# Extract the coefficients for the best lambda
-ridge_coefficients <- coef(ridge_model, s = best_lambda)
-
-# Calculate predictions from the ridge regression model
-predictions_ridge <- predict(ridge_model, s = best_lambda, newx = as.matrix(eplPos_cleaned[, -which(names(eplPos_cleaned) == "Appearances")]))
-
-# Calculate residuals for the ridge regression model
-residuals_ridge <- eplPos_cleaned$Appearances - predictions_ridge
-
-
-cv_ridge <- cv.glmnet(as.matrix(eplPos_cleaned[, -which(names(eplPos_cleaned) == "Appearances")]), 
-                      eplPos_cleaned$Appearances, 
-                      alpha = 0)
-se_ridge <- sqrt(cv_ridge$cvm[cv_ridge$lambda == best_lambda])
-
-# Create a summary similar to lm()
-summary_ridge <- data.frame(
-  Coefficient = ridge_coefficients[-1],  # Exclude the intercept
-  Std.Error = se_ridge  # This is a rough estimate)
-)
-
-# Print the summary for the ridge regression model
-print("Summary for Ridge Regression Model:")
-print(summary_ridge)
-
-# Print residuals summary
-residuals_summary_ridge <- summary(residuals_ridge)
-print("Residuals Summary for Ridge Regression Model:")
-print(residuals_summary_ridge)
-
-# Calculate R-squared for the ridge regression model
-sst_ridge <- sum((eplPos_cleaned$Appearances - mean(eplPos_cleaned$Appearances))^2)
-sse_ridge <- sum(residuals_ridge^2)
-r_squared_ridge <- 1 - sse_ridge/sst_ridge
-
-# Print R-squared for the ridge regression model
-cat("R-squared for Ridge Regression Model: ", r_squared_ridge, "\n")
-
-# Calculate the residual standard error
-residual_standard_error_ridge <- sqrt(sse_ridge / (nrow(eplPos_cleaned) - length(ridge_coefficients) - 1))
-
-# Print Residual Standard Error for Ridge Regression Model
-cat("Residual Standard Error for Ridge Regression Model: ", residual_standard_error_ridge, "\n")
-
-
+cat("R-squared for Lasso Regression Model: ", r_squared_lasso, "\n")
 ```
